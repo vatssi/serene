@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/objectstore http://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <db:mysql-config name="SERENEDB" host="localhost" port="3306" user="root" password="root" database="serene" doc:name="MySQL Configuration">
+        <db:connection-properties>
+            <db:property key="useSSL" value="false"/>
+        </db:connection-properties>
+    </db:mysql-config>
+    <apikit:config name="Router" raml="sereneAPI.raml" consoleEnabled="true" consolePath="console" keepRamlBaseUri="true" doc:name="Router">
+        <apikit:flow-mapping resource="/barcodeDetails" action="get" flow-ref="get:/barcodeDetails"/>
+        <apikit:flow-mapping resource="/addToCart" action="get" flow-ref="get:/addToCart"/>
+        <apikit:flow-mapping resource="/generateInvoice" action="get" flow-ref="get:/generateInvoice"/>
+        <apikit:flow-mapping resource="/login" action="get" flow-ref="get:/login"/>
+        <apikit:flow-mapping resource="/signUp" action="get" flow-ref="post:/signUp"/>
+    </apikit:config>
+    <objectstore:config name="credentials" doc:name="ObjectStore: Connector" partition="credentials"/>
+    
+    <flow name="seerene-api-consoleFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/serene/*" doc:name="HTTP"/>
+        <apikit:router config-ref="Router" doc:name="APIkit Router"/>
+    </flow>
+    <flow name="get:/login">
+        <expression-component doc:name="Expression"><![CDATA[flowVars.memberNameLogIn=message.inboundProperties.'http.query.params'.username;
+flowVars.passwordLogIn=message.inboundProperties.'http.query.params'.password;
+]]></expression-component>
+        <db:select config-ref="SERENEDB" doc:name="Database">
+            <db:parameterized-query><![CDATA[select member_name,pwd from serene.member where member_name=#[flowVars.memberNameLogIn];]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Choice">
+            <when expression="payload.size()!=0">
+                <choice doc:name="Choice">
+                    <when expression="payload[0].pwd==flowVars.passwordLogIn">
+                        <set-payload value="Successful login" doc:name="Set Payload"/>
+                    </when>
+                    <otherwise>
+                        <set-payload value="Wrong Password" doc:name="Set Payload"/>
+                    </otherwise>
+                </choice>
+            </when>
+            <when expression="payload.size()==0">
+                <set-payload value="User does not exists" doc:name="Set Payload"/>
+            </when>
+        </choice>
+    </flow>
+    <flow name="post:/signUp">
+        <expression-component doc:name="Expression"><![CDATA[flowVars.member_name=message.inboundProperties.'http.query.params'.member_name;
+flowVars.emailid=message.inboundProperties.'http.query.params'.emailid;
+flowVars.pwd=message.inboundProperties.'http.query.params'.pwd;
+flowVars.mobileNo1=message.inboundProperties.'http.query.params'.mobileNo1;
+flowVars.mobileNo2=message.inboundProperties.'http.query.params'.mobileNo2;
+]]></expression-component>
+        <db:insert config-ref="SERENEDB" doc:name="Database">
+            <db:dynamic-query><![CDATA[insert into member (member_name,emailid,pwd,mobileNo1,mobileNo2) values ('#[flowVars.member_name]','#[flowVars.emailid]','#[flowVars.pwd]',#[flowVars.mobileNo1],#[flowVars.mobileNo2]);]]></db:dynamic-query>
+        </db:insert>
+        <set-payload value="User has been added." doc:name="Set Payload"/>
+    </flow>
+    <flow name="get:/generateInvoice">
+        <set-variable variableName="member_name" value="#[message.inboundProperties.'http.query.params'.member_name]" doc:name="Variable"/>
+        <db:select config-ref="SERENEDB" doc:name="Database">
+            <db:dynamic-query><![CDATA[select product_Name,price from serene.cart where member_name="#[flowVars.member_name]" and isPaid="N";]]></db:dynamic-query>
+        </db:select>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <!-- <expression-component doc:name="Expression"><![CDATA[if(payload!="null"){
+payload=payload.replace("]","");
+payload=payload.replace("[","");
+}]]></expression-component> -->
+        <set-variable variableName="product_list" value="#[payload]" doc:name="Variable" mimeType="application/json"/>
+        <db:select config-ref="SERENEDB" doc:name="Database">
+            <db:dynamic-query><![CDATA[select sum(price) as 'Total' from cart where member_name = "#[flowVars.member_name]";]]></db:dynamic-query>
+        </db:select>
+        <expression-component doc:name="Expression"><![CDATA[flowVars.total=payload[0].Total;]]></expression-component>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	product_list: flowVars.product_list,
+	total: flowVars.total
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+    </flow>
+    <flow name="get:/barcodeDetails">
+        <expression-component doc:name="Expression"><![CDATA[flowVars.barcode=message.inboundProperties['http.query.params']['barcode'];]]></expression-component>
+        <db:select config-ref="SERENEDB" doc:name="Database">
+            <db:parameterized-query><![CDATA[Select color,price,product_Name  from product where barcode = #[flowVars.barcode];]]></db:parameterized-query>
+        </db:select>
+        <choice doc:name="Choice">
+            <when expression="payload.size()!=0">
+                <json:object-to-json-transformer ignoreBadInput="true" mimeType="application/json" doc:name="Object to JSON"/>
+                <set-variable variableName="resp" value="#[payload]" doc:name="Variable"/>
+                <expression-component doc:name="Expression"><![CDATA[if(flowVars.resp!="null"){
+flowVars.resp=flowVars.resp.replace("]","");
+flowVars.resp=flowVars.resp.replace("[","");
+}]]></expression-component>
+                <set-payload value="#[flowVars.resp]" mimeType="application/json" doc:name="Set Payload"/>
+            </when>
+            <otherwise>
+                <set-payload value="{&quot;Message&quot;:&quot;Product not found in the Invetory&quot;}" doc:name="Set Payload"/>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="get:/addToCart">
+        <expression-component doc:name="Expression"><![CDATA[flowVars.memberName=message.inboundProperties['http.query.params']['member_name'];
+flowVars.productName=message.inboundProperties['http.query.params']['product_Name'];
+]]></expression-component>
+        <db:insert config-ref="SERENEDB" doc:name="Database">
+            <db:parameterized-query><![CDATA[insert into cart (product_Name,price,member_name)values ((select product_Name from product where product_Name = #[flowVars.productName]),(select price from product where product_Name = #[flowVars.productName]),#[flowVars.memberName]);]]></db:parameterized-query>
+        </db:insert>
+        <set-payload value="Product has been added to cart" doc:name="Set Payload"/>
+    </flow>
+</mule>

@@ -1,0 +1,172 @@
+#%RAML 0.8
+---
+title: SERENE
+version: 1.0
+baseUri: http://localhost:8081/
+documentation:
+  - title: Getting Started
+    content: |
+      This sample API has been created as part of Serene project.
+
+/signUp:
+  displayName: Sign Up for the new user
+  description: Call for signing up for new user
+  get:
+    queryParameters: 
+      member_name: 
+        displayName: Name of the member
+        type: string
+        required: true
+      emailid: 
+        displayName: Email Address of the member
+        type: string
+        required: true
+      pwd:
+        displayName: Password
+        type: string
+        required: true
+      mobileNo1:
+        displayName: Mobile Number of that Member
+        type: number
+        required: true
+      mobileNo2:
+        displayName: Another Mobile Number of that Member
+        type: number
+        required: false
+    responses: 
+      200: 
+        description: |
+          New User has been added
+      400: 
+          description: |
+              Bad Request
+      500:           
+        description: |
+            Connetion Timeout
+  post: 
+    body: 
+      application/json:
+        example: !include examples/memberDetails.json
+    responses: 
+      200: 
+        description: |
+          New User has been added
+      400: 
+          description: |
+              Bad Request
+      500:           
+        description: |
+            Connetion Timeout
+
+/login:
+  displayName: Log In
+  description: Use can log in to app
+  get: 
+    queryParameters: 
+      username:
+        displayName: User Name
+        required: true
+        type: String
+      password:
+        displayName: Password to login with respect to username
+        required: true
+        type: String
+    responses: 
+      200: 
+        body: 
+          application/json: 
+            schema: !include schemas/logInResponse.json
+        
+           
+/barcodeDetails:
+  displayName: Item Details
+  description: Gives detials of items which is been scanned
+  get: 
+    queryParameters:
+      barcode:
+        displayName: Scanned Barcode
+        type: String
+        required: true
+        maxLength: 11
+        repeat: true
+        example: |
+          barcode=ABCD1234
+    responses: 
+      200: 
+        description: |
+          Displays details of hte product
+        body: 
+          application/json:
+            example: !include examples/itemDetails.json
+      400: 
+        description: |
+          Bad Request
+      401: 
+        description: |
+          Item not found in the Inventory
+      500: 
+        description: |
+          Connection Time Out
+          
+/addToCart:
+  displayName: Add To Cart
+  #description: Selected item add to be cart
+  get: 
+    queryParameters: 
+      member_name :
+        description: Name of the member 
+        displayName: Memeber Name
+        type: String
+        required: true
+        example: FirstUser
+      product_Name:
+        displayName: Name of the product
+        type: String
+        required: true
+        example : Mango Pickle
+    responses: 
+      200: 
+        body: 
+          application/json: 
+            schema: !include schemas/logInResponse.json
+
+/generateInvoice:
+  displayName: Generate Invoice
+  #descriptioin : After purchasing of items to generate total amount to be paid.
+  get: 
+    queryParameters: 
+      member_name:
+        description: Name of the member 
+        displayName: Memeber Name
+        type: String
+        required: true
+        example: FirstUser
+    responses: 
+      200: 
+        body: 
+          application/json: 
+            example: !include examples/generatedInvoice.json
+      400: 
+        description: |
+          Bad Request
+      500: 
+        description: |
+          Connection Timeout          
+  post: 
+    description: generateInvoice
+    body: 
+      application/json: 
+        example: !include examples/generatedInvoice.json
+    responses: 
+        200: 
+          body: 
+            application/json: 
+              example: !include examples/generatedInvoiceResponse.json
+        400: 
+          description: |
+              Bad Request
+        500:           
+          description: |
+              Connetion Timeout
+
+         
